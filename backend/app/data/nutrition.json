@@ -1,0 +1,13 @@
+{
+  "milk": {"protein": 3.4, "calories": 61, "fibre": 0},
+  "curd": {"protein": 3.5, "calories": 61, "fibre": 0},
+  "paneer": {"protein": 18.0, "calories": 265, "fibre": 0},
+  "whey": {"protein": 80.0, "calories": 400, "fibre": 0},
+  "banana": {"protein": 1.1, "calories": 89, "fibre": 2.6},
+  "oats": {"protein": 13.0, "calories": 389, "fibre": 10.6},
+  "chana": {"protein": 19.0, "calories": 364, "fibre": 8.0},
+  "rice": {"protein": 2.7, "calories": 130, "fibre": 0.4},
+  "roti": {"protein": 8.0, "calories": 205, "fibre": 2.0},
+  "egg": {"protein": 12.6, "calories": 143, "fibre": 0}
+}
+
