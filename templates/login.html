@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login · Protein Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">Protein Tracker</a>
+    <nav aria-label="Main navigation">
+      <a href="/login" class="active">Login</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-heading">
+      <div>
+        <h1>Account</h1>
+        <p>Log in to view and edit your own protein and weight records.</p>
+      </div>
+    </div>
+
+    {% if error %}
+      <section class="card" role="alert" aria-live="polite">
+        <strong class="danger">{{ error }}</strong>
+      </section>
+    {% endif %}
+
+    <div class="two-column" style="grid-template-columns:1fr 1fr;">
+      <section class="card">
+        <h2>Log in</h2>
+        <form method="post" action="/login">
+          <label for="username">Username
+            <input id="username" name="username" type="text" autocomplete="username" required>
+          </label>
+
+          <label for="password">Password
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+          </label>
+
+          <div class="actions">
+            <button type="submit">Log in</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Create account</h2>
+        <form method="post" action="/register">
+          <label for="reg-username">Username
+            <input id="reg-username" name="username" type="text" autocomplete="username" required>
+          </label>
+
+          <label for="reg-password">Password
+            <input id="reg-password" name="password" type="password" autocomplete="new-password" required minlength="8">
+          </label>
+
+          <div class="actions">
+            <button type="submit">Register</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <form method="post" action="/logout" style="margin-top:1rem;" >
+      <button type="submit" class="button secondary">Logout</button>
+    </form>
+  </main>
+
+  <footer>Secure multi-user login using HTTP-only session cookies.</footer>
+</body>
+</html>
+

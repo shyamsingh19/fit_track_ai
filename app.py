@@ -6,12 +6,13 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import ValidationError
+from passlib.context import CryptContext
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import crud
 from database import Base, SessionLocal, engine, get_db
-from models import MealEntry, WeightEntry
+from models import MealEntry, User, WeightEntry
 from schemas import MEAL_TYPES, MealEntryCreate, WeightEntryCreate
 
 
@@ -21,6 +22,41 @@ try:
         raise ValueError
 except ValueError as exc:
     raise RuntimeError("PROTEIN_GOAL must be a positive number") from exc
+
+
+SESSION_COOKIE_NAME = "session_user_id"
+SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30  # 30 days
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+IS_PRODUCTION = ENVIRONMENT == "production"
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def redirect_to_login(request: Request):
+    return RedirectResponse(url="/login", status_code=303)
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    raw = request.cookies.get(SESSION_COOKIE_NAME)
+    if not raw:
+        resp = redirect_to_login(request)
+        resp.delete_cookie(SESSION_COOKIE_NAME)
+        return resp  # type: ignore[return-value]
+
+    try:
+        user_id = int(raw)
+    except ValueError:
+        resp = redirect_to_login(request)
+        resp.delete_cookie(SESSION_COOKIE_NAME)
+        return resp  # type: ignore[return-value]
+
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        resp = redirect_to_login(request)
+        resp.delete_cookie(SESSION_COOKIE_NAME)
+        return resp  # type: ignore[return-value]
+
+    return user
 
 
 @asynccontextmanager
@@ -64,7 +100,7 @@ def meal_data(day, meal_type, food_name, protein, notes):
             protein=protein,
             notes=clean_notes(notes),
         )
-    except ValidationError as exc:
+    except Exception as exc:
         raise HTTPException(422, str(exc)) from exc
 
 
@@ -75,18 +111,22 @@ def weight_data(day, weight, notes):
             weight=weight,
             notes=clean_notes(notes),
         )
-    except ValidationError as exc:
+    except Exception as exc:
         raise HTTPException(422, str(exc)) from exc
 
 
 @app.get("/")
-def dashboard(request: Request, db: Session = Depends(get_db)):
+def dashboard(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     return render(
         request,
         "dashboard.html",
-        stats=crud.dashboard_stats(db, date.today(), PROTEIN_GOAL),
-        recent=crud.recent_meals(db),
-        summary=crud.weekly_summary(db, date.today()),
+        stats=crud.dashboard_stats(db, current_user.id, date.today(), PROTEIN_GOAL),
+        recent=crud.recent_meals(db, current_user.id),
+        summary=crud.weekly_summary(db, current_user.id, date.today()),
     )
 
 
@@ -96,14 +136,26 @@ def daily_log(
     selected_date: date | None = None,
     q: str = "",
     edit_id: int | None = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     selected = selected_date or date.today()
     query = q.strip()
-    entries = crud.search_meals(db, query) if query else crud.meals_for_day(db, selected)
-    editing = db.get(MealEntry, edit_id) if edit_id else None
-    if editing:
-        selected = editing.date
+
+    entries = (
+        crud.search_meals(db, current_user.id, query)
+        if query
+        else crud.meals_for_day(db, current_user.id, selected)
+    )
+
+    editing = None
+    if edit_id:
+        editing = db.scalar(
+            select(MealEntry).where(MealEntry.id == edit_id, MealEntry.user_id == current_user.id)
+        )
+        if editing:
+            selected = editing.date
+
     return render(
         request,
         "log.html",
@@ -123,9 +175,10 @@ def create_meal(
     food_name: str = Form(),
     protein: float = Form(),
     notes: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    crud.add_meal(db, meal_data(day, meal_type, food_name, protein, notes))
+    crud.add_meal(db, current_user.id, meal_data(day, meal_type, food_name, protein, notes))
     return RedirectResponse(f"/log?selected_date={day}", status_code=303)
 
 
@@ -137,18 +190,30 @@ def edit_meal(
     food_name: str = Form(),
     protein: float = Form(),
     notes: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    entry = db.get(MealEntry, entry_id)
-    if not entry:
+    updated = crud.update_meal(
+        db,
+        current_user.id,
+        entry_id,
+        meal_data(day, meal_type, food_name, protein, notes),
+    )
+    if not updated:
         raise HTTPException(404, "Meal entry not found")
-    crud.update_meal(db, entry, meal_data(day, meal_type, food_name, protein, notes))
     return RedirectResponse(f"/log?selected_date={day}", status_code=303)
 
 
 @app.post("/log/{entry_id}/delete")
-def delete_meal(entry_id: int, entry_date: date = Form(), db: Session = Depends(get_db)):
-    crud.delete_entry(db, MealEntry, entry_id)
+def delete_meal(
+    entry_id: int,
+    entry_date: date = Form(),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ok = crud.delete_entry(db, current_user.id, MealEntry, entry_id)
+    if not ok:
+        raise HTTPException(404, "Meal entry not found")
     return RedirectResponse(f"/log?selected_date={entry_date}", status_code=303)
 
 
@@ -156,13 +221,23 @@ def delete_meal(entry_id: int, entry_date: date = Form(), db: Session = Depends(
 def weight_page(
     request: Request,
     edit_id: int | None = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    editing = None
+    if edit_id:
+        editing = db.scalar(
+            select(WeightEntry).where(
+                WeightEntry.id == edit_id,
+                WeightEntry.user_id == current_user.id,
+            )
+        )
+
     return render(
         request,
         "weight.html",
-        entries=crud.weight_history(db),
-        editing=db.get(WeightEntry, edit_id) if edit_id else None,
+        entries=crud.weight_history(db, current_user.id),
+        editing=editing,
     )
 
 
@@ -171,9 +246,10 @@ def create_weight(
     day: date = Form(alias="date"),
     weight: float = Form(),
     notes: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    crud.add_weight(db, weight_data(day, weight, notes))
+    crud.add_weight(db, current_user.id, weight_data(day, weight, notes))
     return RedirectResponse("/weight", status_code=303)
 
 
@@ -183,30 +259,136 @@ def edit_weight(
     day: date = Form(alias="date"),
     weight: float = Form(),
     notes: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    entry = db.get(WeightEntry, entry_id)
-    if not entry:
+    updated = crud.update_weight(
+        db,
+        current_user.id,
+        entry_id,
+        weight_data(day, weight, notes),
+    )
+    if not updated:
         raise HTTPException(404, "Weight entry not found")
-    crud.update_weight(db, entry, weight_data(day, weight, notes))
     return RedirectResponse("/weight", status_code=303)
 
 
 @app.post("/weight/{entry_id}/delete")
-def delete_weight(entry_id: int, db: Session = Depends(get_db)):
-    crud.delete_entry(db, WeightEntry, entry_id)
+def delete_weight(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ok = crud.delete_entry(db, current_user.id, WeightEntry, entry_id)
+    if not ok:
+        raise HTTPException(404, "Weight entry not found")
     return RedirectResponse("/weight", status_code=303)
 
 
 @app.get("/analytics")
-def analytics(request: Request, db: Session = Depends(get_db)):
+def analytics(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     return render(
         request,
         "analytics.html",
-        charts=crud.analytics_data(db, date.today(), PROTEIN_GOAL),
+        charts=crud.analytics_data(db, current_user.id, date.today(), PROTEIN_GOAL),
     )
+
+
+@app.get("/login")
+def login_page(request: Request):
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": None},
+        status_code=200,
+    )
+
+
+@app.post("/register")
+def register(
+    request: Request,
+    username: str = Form(),
+    password: str = Form(),
+    db: Session = Depends(get_db),
+):
+    username = username.strip()
+    if not username:
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "error": "Username is required."}, status_code=400
+        )
+    if not password or len(password) < 8:
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Password must be at least 8 characters."},
+            status_code=400,
+        )
+
+    exists = db.scalar(select(User).where(User.username == username))
+    if exists:
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Username already exists."},
+            status_code=400,
+        )
+
+    user = User(username=username, hashed_password=pwd_context.hash(password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=str(user.id),
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+        path="/",
+    )
+    return resp
+
+
+@app.post("/login")
+def login(
+    request: Request,
+    username: str = Form(),
+    password: str = Form(),
+    db: Session = Depends(get_db),
+):
+    username = username.strip()
+    user = db.scalar(select(User).where(User.username == username))
+    if not user or not pwd_context.verify(password, user.hashed_password):
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Invalid username or password."},
+            status_code=401,
+        )
+
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=str(user.id),
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+        path="/",
+    )
+    return resp
+
+
+@app.post("/logout")
+def logout():
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    return resp
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
