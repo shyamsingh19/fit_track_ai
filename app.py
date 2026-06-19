@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -28,8 +28,6 @@ SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30  # 30 days
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 IS_PRODUCTION = ENVIRONMENT == "production"
 
-# Use bcrypt_sha256 to cleanly bypass passlib legacy environment checks
-pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 
 class NotAuthenticatedException(Exception):
@@ -338,7 +336,8 @@ def register(
     if exists:
         return render(request, "login.html", error="Username already exists.")
 
-    user = User(username=username, hashed_password=pwd_context.hash(password))
+    hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    user = User(username=username, hashed_password=hashed_bytes.decode('utf-8'))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -365,7 +364,8 @@ def login(
 ):
     username = username.strip()
     user = db.scalar(select(User).where(User.username == username))
-    if not user or not pwd_context.verify(password, user.hashed_password):
+    password_matches = bcrypt.checkpw(password.encode('utf-8'), user.hashed_password.encode('utf-8'))
+    if not user or not password_matches:
         return render(request, "login.html", error="Invalid username or password.")
 
     resp = RedirectResponse(url="/", status_code=303)
