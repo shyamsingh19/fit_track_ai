@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Protein Tracker{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><h1>Dashboard</h1><p>{{ today.strftime("%A, %B %d, %Y") }}</p></div>
+  <a class="button" href="/log">Add meal</a>
+</div>
+
+<section class="stats-grid">
+  <article class="card stat"><span>Current weight</span><strong>{{ "%.1f kg"|format(stats.current_weight) if stats.current_weight is not none else "—" }}</strong></article>
+  <article class="card stat"><span>Latest change</span><strong class="{{ 'positive' if stats.weight_change and stats.weight_change > 0 else '' }}">{{ "%+.1f kg"|format(stats.weight_change) if stats.weight_change is not none else "—" }}</strong></article>
+  <article class="card stat"><span>7-day average</span><strong>{{ stats.seven_day_average }} g</strong></article>
+  <article class="card stat"><span>This week average</span><strong>{{ stats.week_average }} g</strong></article>
+  <article class="card stat"><span>This month average</span><strong>{{ stats.month_average }} g</strong></article>
+</section>
+
+<section class="card goal-card">
+  <div><span>Today's protein</span><h2>{{ stats.today_protein }} / {{ goal|round(1) }} g</h2></div>
+  <strong>{{ stats.goal_percent }}%</strong>
+  <div class="progress" role="progressbar" aria-label="Protein goal progress" aria-valuenow="{{ stats.goal_percent }}" aria-valuemin="0" aria-valuemax="100">
+    <span style="width: {{ stats.goal_percent }}%"></span>
+  </div>
+</section>
+
+<div class="two-column">
+  <section class="card">
+    <div class="section-heading"><h2>Recent entries</h2><a href="/log">View log</a></div>
+    {% if recent %}
+      <div class="list">
+      {% for entry in recent %}
+        <div class="list-row">
+          <div><strong>{{ entry.food_name }}</strong><small>{{ entry.date }} · {{ entry.meal_type }}</small></div>
+          <b>{{ entry.protein|round(2) }} g</b>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}<p class="empty">No meals yet. Add your first entry.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Week {{ summary.week }}</h2>
+    <dl class="summary">
+      <div><dt>Average protein</dt><dd>{{ summary.average }} g</dd></div>
+      <div><dt>Highest day</dt><dd>{{ summary.highest }} g</dd></div>
+      <div><dt>Lowest day</dt><dd>{{ summary.lowest }} g</dd></div>
+      <div><dt>Average weight</dt><dd>{{ summary.average_weight ~ " kg" if summary.average_weight is not none else "—" }}</dd></div>
+    </dl>
+  </section>
+</div>
+{% endblock %}
