@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import crud
+from crud import get_ist_date
 from database import Base, SessionLocal, engine, get_db
 from models import MealEntry, User, WeightEntry
 from schemas import MEAL_TYPES, MealEntryCreate, WeightEntryCreate
@@ -86,7 +87,7 @@ def render(request: Request, template: str, **context):
         name=template,
         context={
             "goal": PROTEIN_GOAL,
-            "today": date.today(),
+            "today": get_ist_date(),
             **context,
         },
     )
@@ -131,9 +132,9 @@ def dashboard(
     return render(
         request,
         "dashboard.html",
-        stats=crud.dashboard_stats(db, current_user.id, date.today(), PROTEIN_GOAL),
+        stats=crud.dashboard_stats(db, current_user.id, get_ist_date(), PROTEIN_GOAL),
         recent=crud.recent_meals(db, current_user.id),
-        summary=crud.weekly_summary(db, current_user.id, date.today()),
+        summary=crud.weekly_summary(db, current_user.id, get_ist_date()),
     )
 
 
@@ -146,7 +147,7 @@ def daily_log(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    selected = selected_date or date.today()
+    selected = selected_date or get_ist_date()
     query = q.strip()
 
     entries = (
@@ -305,7 +306,7 @@ def analytics(
     return render(
         request,
         "analytics.html",
-        charts=crud.analytics_data(db, current_user.id, date.today(), PROTEIN_GOAL),
+        charts=crud.analytics_data(db, current_user.id, get_ist_date(), PROTEIN_GOAL),
     )
 
 

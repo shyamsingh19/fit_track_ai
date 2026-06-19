@@ -10,6 +10,10 @@ from models import MealEntry, User, WeightEntry
 from schemas import MealEntryCreate, WeightEntryCreate
 
 
+def get_ist_date():
+    return datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+
+
 def add_meal(db: Session, user_id: int, data: MealEntryCreate) -> MealEntry:
     entry = MealEntry(user_id=user_id, **data.model_dump())
     db.add(entry)
@@ -112,11 +116,9 @@ def weight_history(db: Session, user_id: int):
 
 
 def daily_totals(db: Session, user_id: int, start: date, end: date):
-    # 1. Calculate the current date explicitly in Indian Standard Time (UTC+5:30)
-    ist_timezone = timezone(timedelta(hours=5, minutes=30))
-    current_ist_date = datetime.now(ist_timezone).date()
+    current_ist_date = get_ist_date()
 
-    # 2. Execute your standard database query
+    # Execute your standard database query
     rows = db.execute(
         select(MealEntry.date, func.sum(MealEntry.protein))
         .where(
@@ -128,7 +130,7 @@ def daily_totals(db: Session, user_id: int, start: date, end: date):
 
     mapping = {day: round(total, 2) for day, total in rows}
 
-    # 3. FORCE THE VALUE TO 0 IF NO MEALS ARE REGISTERED FOR THE CURRENT IST DAY
+    # Force 0 for today (IST) if no meals logged yet
     if current_ist_date not in mapping:
         mapping[current_ist_date] = 0.0
 
@@ -236,7 +238,7 @@ def seed_sample_data(db: Session):
     ):
         return False
 
-    sample_day = date.today() - timedelta(days=1)
+    sample_day = get_ist_date() - timedelta(days=1)
     meals = [
         ("Breakfast", "200ml milk", 6),
         ("Lunch", "PG lunch, curd rice", 10),
