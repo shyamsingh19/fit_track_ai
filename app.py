@@ -313,9 +313,7 @@ def analytics(
 @app.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "error": None},
-        status_code=200,
+        request=request, name="login.html", context={"error": None}
     )
 
 
