@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from passlib.context import CryptContext
+import passlib.handlers.bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -28,7 +29,9 @@ SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30  # 30 days
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 IS_PRODUCTION = ENVIRONMENT == "production"
 
+# Force passlib to use the standard bcrypt backend to fix the version bug
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context.parameter_backend("bcrypt", getattr(passlib.handlers.bcrypt, "bcrypt", None))
 
 
 class NotAuthenticatedException(Exception):
