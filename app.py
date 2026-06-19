@@ -326,25 +326,16 @@ def register(
 ):
     username = username.strip()
     if not username:
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Username is required."},
-            status_code=400,
-        )
+        return render(request, "login.html", error="Username is required.")
+
     if not password or len(password) < 8:
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Password must be at least 8 characters."},
-            status_code=400,
+        return render(
+            request, "login.html", error="Password must be at least 8 characters."
         )
 
     exists = db.scalar(select(User).where(User.username == username))
     if exists:
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Username already exists."},
-            status_code=400,
-        )
+        return render(request, "login.html", error="Username already exists.")
 
     user = User(username=username, hashed_password=pwd_context.hash(password))
     db.add(user)
@@ -374,11 +365,7 @@ def login(
     username = username.strip()
     user = db.scalar(select(User).where(User.username == username))
     if not user or not pwd_context.verify(password, user.hashed_password):
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Invalid username or password."},
-            status_code=401,
-        )
+        return render(request, "login.html", error="Invalid username or password.")
 
     resp = RedirectResponse(url="/", status_code=303)
     resp.set_cookie(
