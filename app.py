@@ -15,7 +15,6 @@ from database import Base, SessionLocal, engine, get_db
 from models import MealEntry, User, WeightEntry
 from schemas import MEAL_TYPES, MealEntryCreate, WeightEntryCreate
 
-
 try:
     PROTEIN_GOAL = float(os.getenv("PROTEIN_GOAL", "120"))
     if PROTEIN_GOAL <= 0:
@@ -32,6 +31,12 @@ IS_PRODUCTION = ENVIRONMENT == "production"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+class NotAuthenticatedException(Exception):
+    """Custom exception to catch unauthenticated page requests."""
+
+    pass
+
+
 def redirect_to_login(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
@@ -39,22 +44,16 @@ def redirect_to_login(request: Request):
 async def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     raw = request.cookies.get(SESSION_COOKIE_NAME)
     if not raw:
-        resp = redirect_to_login(request)
-        resp.delete_cookie(SESSION_COOKIE_NAME)
-        return resp  # type: ignore[return-value]
+        raise NotAuthenticatedException()
 
     try:
         user_id = int(raw)
     except ValueError:
-        resp = redirect_to_login(request)
-        resp.delete_cookie(SESSION_COOKIE_NAME)
-        return resp  # type: ignore[return-value]
+        raise NotAuthenticatedException()
 
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
-        resp = redirect_to_login(request)
-        resp.delete_cookie(SESSION_COOKIE_NAME)
-        return resp  # type: ignore[return-value]
+        raise NotAuthenticatedException()
 
     return user
 
@@ -71,6 +70,15 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Protein Tracker", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+@app.exception_handler(NotAuthenticatedException)
+async def auth_exception_handler(request: Request, exc: NotAuthenticatedException):
+    """Intercepts unauthenticated exceptions and routes users to the login page."""
+    resp = RedirectResponse(url="/login", status_code=303)
+    # Clear any corrupted or expired cookies explicitly during redirect
+    resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    return resp
 
 
 def render(request: Request, template: str, **context):
@@ -151,7 +159,9 @@ def daily_log(
     editing = None
     if edit_id:
         editing = db.scalar(
-            select(MealEntry).where(MealEntry.id == edit_id, MealEntry.user_id == current_user.id)
+            select(MealEntry).where(
+                MealEntry.id == edit_id, MealEntry.user_id == current_user.id
+            )
         )
         if editing:
             selected = editing.date
@@ -178,7 +188,9 @@ def create_meal(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    crud.add_meal(db, current_user.id, meal_data(day, meal_type, food_name, protein, notes))
+    crud.add_meal(
+        db, current_user.id, meal_data(day, meal_type, food_name, protein, notes)
+    )
     return RedirectResponse(f"/log?selected_date={day}", status_code=303)
 
 
@@ -317,7 +329,9 @@ def register(
     username = username.strip()
     if not username:
         return templates.TemplateResponse(
-            "login.html", {"request": request, "error": "Username is required."}, status_code=400
+            "login.html",
+            {"request": request, "error": "Username is required."},
+            status_code=400,
         )
     if not password or len(password) < 8:
         return templates.TemplateResponse(
@@ -391,4 +405,3 @@ def logout():
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
