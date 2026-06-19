@@ -6,8 +6,9 @@ from datetime import date, timedelta, datetime, timezone
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from models import MealEntry, User, WeightEntry
+from models import DietPlan, MealEntry, User, WeightEntry
 from schemas import MealEntryCreate, WeightEntryCreate
+
 
 
 def get_ist_date():
@@ -226,12 +227,45 @@ def analytics_data(db: Session, user_id: int, today: date, goal: float):
     }
 
 
+def get_diet_plans(db: Session):
+    return db.scalars(select(DietPlan).order_by(DietPlan.meal_type, DietPlan.id)).all()
+
+
+def create_diet_plan(
+    db: Session,
+    meal_type: str,
+    target_food: str,
+    target_protein: float,
+    notes: str | None = None,
+) -> DietPlan:
+    plan = DietPlan(
+        meal_type=meal_type,
+        target_food=target_food.strip(),
+        target_protein=target_protein,
+        notes=notes.strip() if isinstance(notes, str) else None,
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+def delete_diet_plan(db: Session, plan_id: int) -> bool:
+    plan = db.scalar(select(DietPlan).where(DietPlan.id == plan_id))
+    if not plan:
+        return False
+    db.delete(plan)
+    db.commit()
+    return True
+
+
 def seed_sample_data(db: Session):
     """Seeds sample data for a single demo user (first user)."""
     user = db.scalar(select(User).order_by(User.id.asc()).limit(1))
     if not user:
         # no users => no seed
         return False
+
 
     if db.scalar(
         select(func.count()).select_from(MealEntry).where(MealEntry.user_id == user.id)

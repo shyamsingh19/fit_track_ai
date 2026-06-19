@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 import crud
 from crud import get_ist_date
 from database import Base, SessionLocal, engine, get_db
-from models import MealEntry, User, WeightEntry
+from models import DietPlan, MealEntry, User, WeightEntry
 from schemas import MEAL_TYPES, MealEntryCreate, WeightEntryCreate
+
 
 try:
     PROTEIN_GOAL = float(os.getenv("PROTEIN_GOAL", "120"))
@@ -297,6 +298,80 @@ def delete_weight(
     return RedirectResponse("/weight", status_code=303)
 
 
+@app.get("/diet-chart")
+def diet_chart(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Fetch all diet plan items for the current authenticated user
+    plans = db.scalars(
+        select(DietPlan)
+        .where(DietPlan.user_id == current_user.id)
+        .order_by(DietPlan.day_of_week, DietPlan.meal_type, DietPlan.id)
+    ).all()
+
+    # Group by day_of_week into a dict ordered Monday -> Sunday
+    day_order = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
+    grouped_plans = {day: [] for day in day_order}
+
+    for item in plans:
+        if item.day_of_week in grouped_plans:
+            grouped_plans[item.day_of_week].append(item)
+
+    for day in day_order:
+        grouped_plans[day].sort(key=lambda x: (x.meal_type or "", x.id))
+
+    total = round(sum(p.target_protein for p in plans), 2)
+
+    return render(
+        request,
+        "diet_chart.html",
+        grouped_plans=grouped_plans,
+        day_order=day_order,
+        total_target_protein=total,
+    )
+
+
+
+
+@app.post("/diet-chart/add")
+def add_diet_plan(
+    meal_type: str = Form(),
+    target_food: str = Form(),
+    target_protein: float = Form(),
+    notes: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.create_diet_plan(
+        db,
+        meal_type=meal_type,
+        target_food=target_food,
+        target_protein=target_protein,
+        notes=notes if notes.strip() else None,
+    )
+    return RedirectResponse(url="/diet-chart", status_code=303)
+
+
+@app.post("/diet-chart/delete/{plan_id}")
+def delete_diet_plan_route(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.delete_diet_plan(db, plan_id)
+    return RedirectResponse(url="/diet-chart", status_code=303)
+
+
 @app.get("/analytics")
 def analytics(
     request: Request,
@@ -312,6 +387,7 @@ def analytics(
 
 @app.get("/login")
 def login_page(request: Request):
+
     return templates.TemplateResponse(
         request=request, name="login.html", context={"error": None}
     )
