@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Daily Log · Protein Tracker{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Daily log</h1><p>Enter protein values manually.</p></div></div>
+
+<div class="two-column form-layout">
+  <section class="card">
+    <h2>{{ "Edit meal" if editing else "Add meal" }}</h2>
+    <form method="post" action="{{ '/log/' ~ editing.id ~ '/edit' if editing else '/log' }}">
+      <label>Date<input type="date" name="date" value="{{ editing.date if editing else selected_date }}" required></label>
+      <label>Meal type
+        <select name="meal_type" required>
+          {% for type in meal_types %}<option {{ "selected" if editing and editing.meal_type == type }}>{{ type }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Food name<input name="food_name" maxlength="250" value="{{ editing.food_name if editing else '' }}" placeholder="e.g. 200ml milk" required></label>
+      <label>Protein (g)<input type="number" name="protein" min="0" max="1000" step="0.01" value="{{ editing.protein if editing else '' }}" required></label>
+      <label>Notes<textarea name="notes" maxlength="2000" rows="3" placeholder="Optional">{{ editing.notes or '' if editing else '' }}</textarea></label>
+      <div class="actions"><button type="submit">{{ "Update" if editing else "Save" }}</button>{% if editing %}<a class="button secondary" href="/log?selected_date={{ editing.date }}">Cancel</a>{% endif %}</div>
+    </form>
+  </section>
+
+  <section>
+    <form class="card search-form" method="get" action="/log">
+      <label>Choose day<input type="date" name="selected_date" value="{{ selected_date }}"></label>
+      <button type="submit">Show day</button>
+    </form>
+    <form class="card search-form" method="get" action="/log">
+      <label>Search by food or date<input name="q" value="{{ query }}" placeholder="milk or 2026-06-04"></label>
+      <button type="submit">Search</button>
+      {% if query %}<a href="/log">Clear</a>{% endif %}
+    </form>
+  </section>
+</div>
+
+<section class="card">
+  <div class="section-heading"><h2>{{ 'Search results' if query else selected_date.strftime('%B %d, %Y') }}</h2>{% if total is not none %}<strong>Total: {{ total }} g</strong>{% endif %}</div>
+  {% if entries %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Date</th><th>Meal</th><th>Food</th><th>Protein</th><th>Notes</th><th></th></tr></thead>
+    <tbody>
+    {% for entry in entries %}
+      <tr>
+        <td>{{ entry.date }}</td><td>{{ entry.meal_type }}</td><td>{{ entry.food_name }}</td>
+        <td><strong>{{ entry.protein|round(2) }} g</strong></td><td>{{ entry.notes or "—" }}</td>
+        <td class="row-actions">
+          <a href="/log?edit_id={{ entry.id }}">Edit</a>
+          <form method="post" action="/log/{{ entry.id }}/delete" data-confirm="Delete this meal?">
+            <input type="hidden" name="entry_date" value="{{ entry.date }}"><button class="link danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="empty">No matching meals.</p>{% endif %}
+</section>
+{% endblock %}
