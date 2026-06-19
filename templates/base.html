@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Protein Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">Protein Tracker</a>
+    <nav aria-label="Main navigation">
+      <a href="/" class="{{ 'active' if request.url.path == '/' }}">Dashboard</a>
+      <a href="/log" class="{{ 'active' if request.url.path == '/log' }}">Daily Log</a>
+      <a href="/weight" class="{{ 'active' if request.url.path == '/weight' }}">Weight</a>
+      <a href="/analytics" class="{{ 'active' if request.url.path == '/analytics' }}">Analytics</a>
+    </nav>
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+  <footer>Personal protein tracker · Data stays in your SQLite database.</footer>
+  <script>
+    document.querySelectorAll("[data-confirm]").forEach(form => {
+      form.addEventListener("submit", event => {
+        if (!confirm(form.dataset.confirm)) event.preventDefault();
+      });
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
