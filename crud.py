@@ -116,8 +116,14 @@ def daily_totals(db: Session, user_id: int, start: date, end: date):
         )
         .group_by(MealEntry.date)
     ).all()
-    return {day_: round(total, 2) for day_, total in rows}
-
+    
+    mapping = {day: round(total, 2) for day, total in rows}
+    
+    # FORCE TODAY TO BE 0 IF NO MEALS ARE REGISTERED YET
+    if date.today() not in mapping:
+        mapping[date.today()] = 0.0
+        
+    return mapping
 
 def date_series(start: date, end: date):
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
