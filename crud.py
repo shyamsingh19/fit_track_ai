@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -40,7 +40,9 @@ def add_weight(db: Session, user_id: int, data: WeightEntryCreate) -> WeightEntr
 
 def update_weight(db: Session, user_id: int, entry_id: int, data: WeightEntryCreate):
     entry = db.scalar(
-        select(WeightEntry).where(WeightEntry.id == entry_id, WeightEntry.user_id == user_id)
+        select(WeightEntry).where(
+            WeightEntry.id == entry_id, WeightEntry.user_id == user_id
+        )
     )
     if not entry:
         return None
@@ -52,7 +54,9 @@ def update_weight(db: Session, user_id: int, entry_id: int, data: WeightEntryCre
 
 def delete_entry(db: Session, user_id: int, model, entry_id: int) -> bool:
     # model must have id and user_id columns
-    entry = db.scalar(select(model).where(model.id == entry_id, model.user_id == user_id))
+    entry = db.scalar(
+        select(model).where(model.id == entry_id, model.user_id == user_id)
+    )
     if not entry:
         return False
     db.delete(entry)
@@ -108,6 +112,11 @@ def weight_history(db: Session, user_id: int):
 
 
 def daily_totals(db: Session, user_id: int, start: date, end: date):
+    # 1. Calculate the current date explicitly in Indian Standard Time (UTC+5:30)
+    ist_timezone = timezone(timedelta(hours=5, minutes=30))
+    current_ist_date = datetime.now(ist_timezone).date()
+
+    # 2. Execute your standard database query
     rows = db.execute(
         select(MealEntry.date, func.sum(MealEntry.protein))
         .where(
@@ -116,14 +125,15 @@ def daily_totals(db: Session, user_id: int, start: date, end: date):
         )
         .group_by(MealEntry.date)
     ).all()
-    
+
     mapping = {day: round(total, 2) for day, total in rows}
-    
-    # FORCE TODAY TO BE 0 IF NO MEALS ARE REGISTERED YET
-    if date.today() not in mapping:
-        mapping[date.today()] = 0.0
-        
+
+    # 3. FORCE THE VALUE TO 0 IF NO MEALS ARE REGISTERED FOR THE CURRENT IST DAY
+    if current_ist_date not in mapping:
+        mapping[current_ist_date] = 0.0
+
     return mapping
+
 
 def date_series(start: date, end: date):
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
@@ -150,7 +160,9 @@ def dashboard_stats(db: Session, user_id: int, today: date, goal: float):
         "current_weight": current,
         "weight_change": change,
         "today_protein": today_total,
-        "seven_day_average": average_for_period(totals, today - timedelta(days=6), today),
+        "seven_day_average": average_for_period(
+            totals, today - timedelta(days=6), today
+        ),
         "week_average": average_for_period(totals, week_start, today),
         "month_average": average_for_period(totals, month_start, today),
         "goal_percent": min(round(today_total / goal * 100), 100),
@@ -163,8 +175,7 @@ def weekly_summary(db: Session, user_id: int, today: date):
     values = [totals.get(day_, 0) for day_ in date_series(start, today)]
 
     weights = db.scalars(
-        select(WeightEntry.weight)
-        .where(
+        select(WeightEntry.weight).where(
             WeightEntry.user_id == user_id,
             WeightEntry.date.between(start, today),
         )
@@ -195,7 +206,9 @@ def analytics_data(db: Session, user_id: int, today: date, goal: float):
 
     tracked_values = list(totals.values())
     adherence = (
-        round(sum(value >= goal for value in tracked_values) / len(tracked_values) * 100)
+        round(
+            sum(value >= goal for value in tracked_values) / len(tracked_values) * 100
+        )
         if tracked_values
         else 0
     )
@@ -218,7 +231,9 @@ def seed_sample_data(db: Session):
         # no users => no seed
         return False
 
-    if db.scalar(select(func.count()).select_from(MealEntry).where(MealEntry.user_id == user.id)):
+    if db.scalar(
+        select(func.count()).select_from(MealEntry).where(MealEntry.user_id == user.id)
+    ):
         return False
 
     sample_day = date.today() - timedelta(days=1)
@@ -241,7 +256,10 @@ def seed_sample_data(db: Session):
             )
         )
 
-    db.add(WeightEntry(user_id=user.id, date=sample_day, weight=54.7, notes="Sample weight"))
+    db.add(
+        WeightEntry(
+            user_id=user.id, date=sample_day, weight=54.7, notes="Sample weight"
+        )
+    )
     db.commit()
     return True
-
