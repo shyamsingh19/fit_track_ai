@@ -233,12 +233,16 @@ def get_diet_plans(db: Session):
 
 def create_diet_plan(
     db: Session,
+    user_id: int,
+    day_of_week: str,
     meal_type: str,
     target_food: str,
     target_protein: float,
     notes: str | None = None,
 ) -> DietPlan:
     plan = DietPlan(
+        user_id=user_id,
+        day_of_week=day_of_week,
         meal_type=meal_type,
         target_food=target_food.strip(),
         target_protein=target_protein,

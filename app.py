@@ -345,6 +345,7 @@ def diet_chart(
 
 @app.post("/diet-chart/add")
 def add_diet_plan(
+    day_of_week: str = Form(),
     meal_type: str = Form(),
     target_food: str = Form(),
     target_protein: float = Form(),
@@ -354,6 +355,8 @@ def add_diet_plan(
 ):
     crud.create_diet_plan(
         db,
+        user_id=current_user.id,
+        day_of_week=day_of_week,
         meal_type=meal_type,
         target_food=target_food,
         target_protein=target_protein,
