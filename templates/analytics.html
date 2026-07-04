@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Analytics · Protein Tracker{% endblock %}
-{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>{% endblock %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading"><div><h1>Analytics</h1><p>Simple trends from your recent entries.</p></div></div>
 
@@ -8,17 +8,107 @@
   <article class="card stat"><span>Protein goal adherence</span><strong>{{ charts.adherence }}%</strong><small>Tracked days meeting {{ goal|round(1) }} g</small></article>
 </section>
 <div class="chart-grid">
-  <section class="card chart-card"><h2>Daily protein trend</h2><canvas id="proteinChart"></canvas></section>
-  <section class="card chart-card"><h2>Weekly protein average</h2><canvas id="weeklyChart"></canvas></section>
-  <section class="card chart-card full"><h2>Weight trend</h2><canvas id="weightChart"></canvas></section>
+  <section class="card chart-card">
+    <h2>Daily protein trend</h2>
+    <div class="skel skel-chart" data-skel-for="proteinChart"></div>
+    <canvas id="proteinChart" class="chart-canvas"></canvas>
+  </section>
+  <section class="card chart-card">
+    <h2>Weekly protein average</h2>
+    <div class="skel skel-chart" data-skel-for="weeklyChart"></div>
+    <canvas id="weeklyChart" class="chart-canvas"></canvas>
+  </section>
+  <section class="card chart-card full">
+    <h2>Weight trend</h2>
+    <div class="skel skel-chart" data-skel-for="weightChart"></div>
+    <canvas id="weightChart" class="chart-canvas"></canvas>
+  </section>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
 const charts = {{ charts|tojson }};
-const common = {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: false}}};
-new Chart(document.getElementById("proteinChart"), {type: "line", data: {labels: charts.protein_labels, datasets: [{data: charts.protein_values, borderColor: "#2563eb", backgroundColor: "#dbeafe", fill: true, tension: .25}]}, options: {...common, scales: {y: {beginAtZero: true}}}});
-new Chart(document.getElementById("weeklyChart"), {type: "bar", data: {labels: charts.weekly_labels, datasets: [{data: charts.weekly_values, backgroundColor: "#2563eb", borderRadius: 5}]}, options: {...common, scales: {y: {beginAtZero: true}}}});
-new Chart(document.getElementById("weightChart"), {type: "line", data: {labels: charts.weight_labels, datasets: [{data: charts.weight_values, borderColor: "#059669", pointBackgroundColor: "#059669", tension: .2}]}, options: common});
+const goal = {{ goal|tojson }};
+
+function revealChart(canvas) {
+  const skel = document.querySelector(`[data-skel-for="${canvas.id}"]`);
+  if (skel) skel.remove();
+  canvas.classList.add("is-ready");
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const css = getComputedStyle(document.documentElement);
+  const tok = (name) => css.getPropertyValue(name).trim();
+
+  Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+  Chart.defaults.color = tok("--text-muted");
+  Chart.defaults.borderColor = tok("--border");
+
+  function fade(ctx, hex, alpha) {
+    const g = ctx.createLinearGradient(0, 0, 0, 260);
+    g.addColorStop(0, hex + alpha);
+    g.addColorStop(1, hex + "00");
+    return g;
+  }
+
+  const gridStyle = { color: tok("--border"), drawBorder: false };
+  const common = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    animation: { duration: 260, easing: "easeOutQuart" },
+    plugins: { legend: { display: false }, tooltip: {
+      backgroundColor: tok("--text"), padding: 10, cornerRadius: 10,
+      titleFont: { weight: "700" }, displayColors: false,
+      callbacks: { label: (ctx) => `${ctx.formattedValue} g` },
+    } },
+    scales: { y: { beginAtZero: false, grid: gridStyle, ticks: { padding: 6 } }, x: { grid: { display: false } } },
+  };
+
+  const proteinCanvas = document.getElementById("proteinChart");
+  const proteinCtx = proteinCanvas.getContext("2d");
+  new Chart(proteinCtx, {
+    type: "line",
+    data: { labels: charts.protein_labels, datasets: [
+      {
+        data: charts.protein_values, borderColor: tok("--accent"),
+        backgroundColor: fade(proteinCtx, tok("--accent"), "33"),
+        fill: true, tension: .35, borderWidth: 2.5,
+        pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: tok("--accent"),
+      },
+      {
+        data: charts.protein_labels.map(() => goal), borderColor: tok("--gold"),
+        borderDash: [4, 4], borderWidth: 1.5, pointRadius: 0, fill: false,
+      },
+    ] },
+    options: { ...common, scales: { ...common.scales, y: { ...common.scales.y, beginAtZero: true } } },
+  });
+  revealChart(proteinCanvas);
+
+  const weeklyCanvas = document.getElementById("weeklyChart");
+  new Chart(weeklyCanvas, {
+    type: "bar",
+    data: { labels: charts.weekly_labels, datasets: [{
+      data: charts.weekly_values,
+      backgroundColor: charts.weekly_values.map((v) => (v >= goal ? tok("--gold") : tok("--violet"))),
+      borderRadius: 6, maxBarThickness: 34,
+    }] },
+    options: { ...common, scales: { ...common.scales, y: { ...common.scales.y, beginAtZero: true } } },
+  });
+  revealChart(weeklyCanvas);
+
+  const weightCanvas = document.getElementById("weightChart");
+  const weightCtx = weightCanvas.getContext("2d");
+  new Chart(weightCtx, {
+    type: "line",
+    data: { labels: charts.weight_labels, datasets: [{
+      data: charts.weight_values, borderColor: tok("--teal"),
+      backgroundColor: fade(weightCtx, tok("--teal"), "26"),
+      fill: true, tension: .3, borderWidth: 2.5,
+      pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: tok("--teal"),
+    }] },
+    options: common,
+  });
+  revealChart(weightCanvas);
+});
 </script>
 {% endblock %}

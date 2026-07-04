@@ -73,154 +73,6 @@
     <span></span>
   </div>
 
-  <style>
-    .week-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      align-items: start;
-    }
-
-    .day-card {
-      background: #fff;
-      border: 1px solid #e8ecf4;
-      border-radius: 14px;
-      padding: 14px;
-      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-    }
-
-    .day-header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .day-title {
-      margin: 0;
-      font-size: 1.05rem;
-      font-weight: 900;
-      letter-spacing: 0.01em;
-    }
-
-    .day-banner {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 800;
-      background: #fff7ed;
-      color: #9a3412;
-      border: 1px solid #fed7aa;
-      white-space: nowrap;
-    }
-
-    .meal-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 6px;
-    }
-
-    .meal-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: start;
-      padding: 10px;
-      border-radius: 12px;
-      border: 1px solid #eef2ff;
-      background: #fbfcff;
-    }
-
-    .meal-row.is-routine {
-      border-color: #fde68a;
-      background: #fffdf7;
-    }
-
-    .meal-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .meal-type-tag {
-      display: inline-block;
-      font-size: 0.78rem;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #334155;
-    }
-
-    .meal-food {
-      font-weight: 900;
-      line-height: 1.2;
-      color: #0f172a;
-      overflow-wrap: anywhere;
-    }
-
-    .protein-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 900;
-      background: #e0f2fe;
-      color: #0369a1;
-      border: 1px solid #bae6fd;
-      margin-top: 4px;
-      width: fit-content;
-    }
-
-    .meal-notes {
-      margin-top: 6px;
-      color: #526079;
-      font-size: 0.92rem;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .row-remove {
-      margin-top: 2px;
-    }
-
-    .row-remove button {
-      background: transparent;
-      border: 0;
-      cursor: pointer;
-      font-size: 1.05rem;
-      line-height: 1;
-      padding: 6px 8px;
-      border-radius: 10px;
-      color: #dc2626;
-      transition: background 120ms ease;
-    }
-
-    .row-remove button:hover {
-      background: rgba(220, 38, 38, 0.08);
-    }
-
-    @media (max-width: 520px) {
-      .day-header {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .meal-row {
-        grid-template-columns: 1fr;
-      }
-
-      .row-remove {
-        justify-self: start;
-      }
-    }
-  </style>
-
   {% if grouped_plans %}
     <div class="week-grid">
       {% for day in day_order %}
@@ -230,24 +82,15 @@
             <h3 class="day-title">{{ day }}</h3>
 
             {# Highlight the physical training focus for that day #}
-            {% set has_routine = false %}
+            {% set routine = namespace(banner_text='') %}
             {% for it in items %}
-              {% if it.meal_type == 'Workout' or it.meal_type == 'Pre-Workout' %}
-                {% set has_routine = true %}
+              {% if (it.meal_type == 'Workout' or it.meal_type == 'Pre-Workout') and routine.banner_text == '' %}
+                {% set routine.banner_text = it.target_food %}
               {% endif %}
             {% endfor %}
 
-            {% if has_routine %}
-              {# Use first routine item as banner text source #}
-              {% set banner_text = '' %}
-              {% for it in items %}
-                {% if (it.meal_type == 'Workout' or it.meal_type == 'Pre-Workout') and banner_text == '' %}
-                  {% set banner_text = it.target_food %}
-                {% endif %}
-              {% endfor %}
-              {% if banner_text %}
-                <span class="day-banner">{{ banner_text }}</span>
-              {% endif %}
+            {% if routine.banner_text %}
+              <span class="day-banner">{{ routine.banner_text }}</span>
             {% endif %}
           </header>
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, String, Text
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,13 +28,15 @@ class User(Base):
 
 class MealEntry(Base):
     __tablename__ = "meal_entries"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    __table_args__ = (
+        Index("idx_meal_entries_user_date", "user_id", "date"),
+        Index("idx_meal_entries_user_food_name", "user_id", "food_name"),
     )
 
-    date: Mapped[date] = mapped_column(Date, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+
+    date: Mapped[date] = mapped_column(Date)
     meal_type: Mapped[str] = mapped_column(String(30))
     food_name: Mapped[str] = mapped_column(String(250), index=True)
     protein: Mapped[float] = mapped_column(Float)
@@ -46,13 +48,12 @@ class MealEntry(Base):
 
 class WeightEntry(Base):
     __tablename__ = "weight_entries"
+    __table_args__ = (Index("idx_weight_entries_user_date", "user_id", "date"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
-    date: Mapped[date] = mapped_column(Date, index=True)
+    date: Mapped[date] = mapped_column(Date)
     weight: Mapped[float] = mapped_column(Float)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

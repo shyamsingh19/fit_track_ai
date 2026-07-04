@@ -116,6 +116,15 @@ def weight_history(db: Session, user_id: int):
     ).all()
 
 
+def latest_weights(db: Session, user_id: int, limit: int = 2):
+    return db.scalars(
+        select(WeightEntry)
+        .where(WeightEntry.user_id == user_id)
+        .order_by(WeightEntry.date.desc(), WeightEntry.id.desc())
+        .limit(limit)
+    ).all()
+
+
 def daily_totals(db: Session, user_id: int, start: date, end: date):
     current_ist_date = get_ist_date()
 
@@ -154,11 +163,15 @@ def dashboard_stats(db: Session, user_id: int, today: date, goal: float):
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
 
-    weights = weight_history(db, user_id)
+    # Only a handful of rows are needed here (current + change + a short sparkline)
+    # — avoid pulling the user's entire weight history just to read the top of it.
+    weights = latest_weights(db, user_id, limit=8)
     current = weights[0].weight if weights else None
-    change = current - weights[1].weight if len(weights) > 1 else None
+    change = current - weights[1].weight if current is not None and len(weights) > 1 else None
+    weight_trend = [entry.weight for entry in reversed(weights)]
 
     today_total = totals.get(today, 0)
+    last_7_days = date_series(today - timedelta(days=6), today)
     return {
         "current_weight": current,
         "weight_change": change,
@@ -169,12 +182,17 @@ def dashboard_stats(db: Session, user_id: int, today: date, goal: float):
         "week_average": average_for_period(totals, week_start, today),
         "month_average": average_for_period(totals, month_start, today),
         "goal_percent": min(round(today_total / goal * 100), 100),
+        "protein_trend": [totals.get(day_, 0) for day_ in last_7_days],
+        "weight_trend": weight_trend,
+        # Reused by weekly_summary_from_totals() so that route doesn't re-query the DB.
+        "totals": totals,
     }
 
 
-def weekly_summary(db: Session, user_id: int, today: date):
+def weekly_summary_from_totals(totals: dict[date, float], db: Session, user_id: int, today: date):
+    """Same output as the old weekly_summary(), but reuses the 30-day totals
+    dashboard_stats() already fetched instead of re-querying daily_totals()."""
     start = today - timedelta(days=today.weekday())
-    totals = daily_totals(db, user_id, start, today)
     values = [totals.get(day_, 0) for day_ in date_series(start, today)]
 
     weights = db.scalars(

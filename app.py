@@ -130,12 +130,14 @@ def dashboard(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    today = get_ist_date()
+    stats = crud.dashboard_stats(db, current_user.id, today, PROTEIN_GOAL)
     return render(
         request,
         "dashboard.html",
-        stats=crud.dashboard_stats(db, current_user.id, get_ist_date(), PROTEIN_GOAL),
+        stats=stats,
         recent=crud.recent_meals(db, current_user.id),
-        summary=crud.weekly_summary(db, current_user.id, get_ist_date()),
+        summary=crud.weekly_summary_from_totals(stats["totals"], db, current_user.id, today),
     )
 
 
@@ -167,9 +169,7 @@ def daily_log(
         if editing:
             selected = editing.date
 
-    return render(
-        request,
-        "log.html",
+    context = dict(
         entries=entries,
         selected_date=selected,
         query=query,
@@ -177,6 +177,14 @@ def daily_log(
         meal_types=MEAL_TYPES,
         total=round(sum(entry.protein for entry in entries), 2) if not query else None,
     )
+
+    # The log page's search/date-filter forms progressively enhance into a
+    # fetch() that swaps just the results card — serve that fragment alone
+    # so we're not re-rendering (or re-downloading) the whole page for it.
+    if request.headers.get("x-partial") == "1":
+        return render(request, "_log_results.html", **context)
+
+    return render(request, "log.html", **context)
 
 
 @app.post("/log")

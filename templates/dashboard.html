@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import sparkline %}
 {% block title %}Dashboard · Protein Tracker{% endblock %}
 {% block content %}
 <div class="page-heading">
@@ -7,19 +8,25 @@
 </div>
 
 <section class="stats-grid">
-  <article class="card stat"><span>Current weight</span><strong>{{ "%.1f kg"|format(stats.current_weight) if stats.current_weight is not none else "—" }}</strong></article>
+  <article class="card stat">
+    <span>Current weight</span>
+    <strong>{{ "%.1f kg"|format(stats.current_weight) if stats.current_weight is not none else "—" }}</strong>
+    {{ sparkline(stats.weight_trend, 'teal') }}
+  </article>
   <article class="card stat"><span>Latest change</span><strong class="{{ 'positive' if stats.weight_change and stats.weight_change > 0 else '' }}">{{ "%+.1f kg"|format(stats.weight_change) if stats.weight_change is not none else "—" }}</strong></article>
-  <article class="card stat"><span>7-day average</span><strong>{{ stats.seven_day_average }} g</strong></article>
+  <article class="card stat">
+    <span>7-day average</span>
+    <strong>{{ stats.seven_day_average }} g</strong>
+    {{ sparkline(stats.protein_trend, 'accent') }}
+  </article>
   <article class="card stat"><span>This week average</span><strong>{{ stats.week_average }} g</strong></article>
   <article class="card stat"><span>This month average</span><strong>{{ stats.month_average }} g</strong></article>
 </section>
 
 <section class="card goal-card">
+  <div class="goal-ring" style="--pct: {{ stats.goal_percent }}" data-pct="{{ stats.goal_percent }}"
+       role="img" aria-label="{{ stats.goal_percent }}% of today's protein goal reached"></div>
   <div><span>Today's protein</span><h2>{{ stats.today_protein }} / {{ goal|round(1) }} g</h2></div>
-  <strong>{{ stats.goal_percent }}%</strong>
-  <div class="progress" role="progressbar" aria-label="Protein goal progress" aria-valuenow="{{ stats.goal_percent }}" aria-valuemin="0" aria-valuemax="100">
-    <span style="width: {{ stats.goal_percent }}%"></span>
-  </div>
 </section>
 
 <div class="two-column">

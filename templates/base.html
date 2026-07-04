@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Protein Tracker{% endblock %}</title>
+  <link rel="preload" href="{{ url_for('static', path='/fonts/inter-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ url_for('static', path='/fonts/manrope-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
   {% block head %}{% endblock %}
 </head>
@@ -22,10 +24,11 @@
   <main>{% block content %}{% endblock %}</main>
   <footer>Personal protein tracker · Data stays in your SQLite database.</footer>
   <script>
-    document.querySelectorAll("[data-confirm]").forEach(form => {
-      form.addEventListener("submit", event => {
-        if (!confirm(form.dataset.confirm)) event.preventDefault();
-      });
+    // Delegated so it also covers forms swapped in later (e.g. the log page's
+    // AJAX-refreshed results card), not just what's in the initial document.
+    document.addEventListener("submit", event => {
+      const form = event.target.closest("[data-confirm]");
+      if (form && !confirm(form.dataset.confirm)) event.preventDefault();
     });
   </script>
   {% block scripts %}{% endblock %}
